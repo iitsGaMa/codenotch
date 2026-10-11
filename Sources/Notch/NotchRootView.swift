@@ -156,6 +156,7 @@ struct NotchRootView: View {
                    model.isExpanded {
                     TooltipCard(
                         snapshot: snapshot,
+                        maximumHeight: model.tooltipHeightLimit,
                         activity: model.activity(for: snapshot),
                         now: model.now,
                         direction: model.edge.tooltipDirection,
@@ -579,7 +580,7 @@ struct NotchRootView: View {
 
     /// The card's extent across the stack (its height on a horizontal edge).
     private func cardAcross(_ snapshot: ProviderSnapshot) -> CGFloat {
-        NotchLayout.cardHeight(
+        min(model.tooltipHeightLimit, NotchLayout.cardHeight(
             windowCount: snapshot.windows.count,
             groupCount: snapshot.windowGroupCount,
             moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
@@ -596,7 +597,7 @@ struct NotchRootView: View {
             localLedgerRows: snapshot.localLedgerRowCount,
             compactRowCount: snapshot.compactRowCount,
             showsDeepSeekPricing: model.deepSeekPricingEnabled,
-            costRows: model.costRows(for: snapshot))
+            costRows: model.costRows(for: snapshot)))
     }
 
     private func tooltipTailOffset(index: Int, snapshot: ProviderSnapshot) -> CGFloat {

@@ -1268,6 +1268,14 @@ final class NotchViewModel: ObservableObject {
         CostSection.rowCount(for: snapshot)
     }
 
+    /// Tooltips keep their own scale; leave room for their rounded edges.
+    var tooltipHeightLimit: CGFloat {
+        guard screenSize.height > 0 else { return .infinity }
+        let inset = edge.isVertical ? 2 * NotchLayout.cardCorner
+            : NotchLayout.bodyDepth(for: edge) * sizeScale + NotchLayout.tailLength + NotchLayout.tailGap + NotchLayout.cardCorner
+        return max(2 * NotchLayout.cardPadding + 1, screenSize.height - inset)
+    }
+
     private func contentCardHeight(sessionCap: Int) -> CGFloat {
         snapshots.map { snapshot in
             NotchLayout.cardHeight(windowCount: snapshot.windows.count,
@@ -1287,7 +1295,7 @@ final class NotchViewModel: ObservableObject {
                 compactRowCount: snapshot.compactRowCount,
                 showsDeepSeekPricing: deepSeekPricingEnabled,
                 costRows: costRows(for: snapshot))
-        }.max() ?? 0
+        }.map { min($0, tooltipHeightLimit) }.max() ?? 0
     }
 
     func maxCardHeight(cellCount: Int) -> CGFloat {

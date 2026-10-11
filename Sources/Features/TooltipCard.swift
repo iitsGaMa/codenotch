@@ -1104,6 +1104,7 @@ private struct SessionList: View {
 
 struct TooltipCard: View {
     let snapshot: ProviderSnapshot
+    var maximumHeight: CGFloat = .infinity
     var activity: ActivitySummary?
     let now: Date
     /// Which way the card sits from the notch, which follows from the edge.
@@ -1154,7 +1155,20 @@ struct TooltipCard: View {
     }
 
     var body: some View {
-        TooltipShell(height: height, direction: direction, tailOffset: tailOffset) {
+        TooltipShell(height: min(height, maximumHeight), direction: direction, tailOffset: tailOffset) {
+            if height > maximumHeight {
+                ScrollView(.vertical) {
+                    cardContent
+                }
+                .frame(height: max(1, maximumHeight - 2 * NotchLayout.cardPadding))
+                .id(snapshot.id)
+            } else {
+                cardContent
+            }
+        }
+    }
+
+    private var cardContent: some View {
             // Stacked, not replaced in place: during a swap both sets of rows
             // exist for a moment, and in a ZStack they overlap and dissolve
             // instead of shoving each other around. Top-aligned so neither
@@ -1193,6 +1207,5 @@ struct TooltipCard: View {
                 .transition(.opacity.animation(NotchMotion.crossfade))
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
     }
 }

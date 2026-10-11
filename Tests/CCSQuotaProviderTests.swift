@@ -46,6 +46,13 @@ final class CCSQuotaProviderTests: XCTestCase {
         let image = try XCTUnwrap(renderer.cgImage)
         let png = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
         try png.write(to: URL(fileURLWithPath: "/tmp/codenotch-pool-preview.png"))
+        // The same long pool must fit a small viewport without shrinking its rows.
+        let limited = ImageRenderer(content: TooltipCard(snapshot: snapshot, maximumHeight: 400,
+                                                        now: Date(), direction: .trailing)
+            .environment(\.notchSurfaceStyle, .solid))
+        let limitedImage = try XCTUnwrap(limited.cgImage)
+        XCTAssertEqual(limitedImage.height, 400)
+
     }
 
     func testCreditsKeepSpendingCapSeparateFromUnknownBalance() throws {
