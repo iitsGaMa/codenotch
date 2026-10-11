@@ -1158,7 +1158,9 @@ struct TooltipCard: View {
         TooltipShell(height: min(height, maximumHeight), direction: direction, tailOffset: tailOffset) {
             ScrollView(.vertical) {
                 cardContent.fixedSize(horizontal: false, vertical: true)
+                    .padding(.trailing, 12)
             }
+            .padding(.trailing, -12)
             .scrollBounceBehavior(.basedOnSize)
             .frame(height: max(1, min(height, maximumHeight) - 2 * NotchLayout.cardPadding))
             .id(snapshot.id)

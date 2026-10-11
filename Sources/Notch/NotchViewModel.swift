@@ -1153,12 +1153,9 @@ final class NotchViewModel: ObservableObject {
         guard edge.isVertical, screenSize.height > 0, cellCount > 1 else {
             return NotchLayout.cellSpacing
         }
-        // Extra model cells spend the gaps first. Reserve the cards actually
-        // present; assuming four quota windows for every local model overflows laptops.
-        let slack = NotchLayout.slack(for: edge,
-            maxCardHeight: snapshots.isEmpty ? NotchLayout.maxCardHeight(sessionCap: 0)
-                : contentCardHeight(sessionCap: 0),
-            notchScale: sizeScale)
+        // Cards scroll and are positioned independently; only the stack itself
+        // should determine whether its ring spacing needs to shrink.
+        let slack = NotchLayout.cardCorner
         let packed = NotchLayout.shapeLength(cellCount: cellCount, edge: edge,
                                              flare: flare, spacing: 0)
         return min(NotchLayout.cellSpacing,
