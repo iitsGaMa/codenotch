@@ -433,6 +433,7 @@ struct ProviderSnapshot: Identifiable, Equatable {
 
     /// What the cell prints under the ring.
     var headlineText: String {
+        if id.hasPrefix("ccs-pool-") { return displayName }
         if kind == .localRuntime {
             return showsLocalPerformance ? (localPerformance?.headlineText ?? "— tok/s")
                 : (localModel?.memoryText ?? "—")

@@ -1,0 +1,30 @@
+name: Homelab build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.repository == 'iitsGaMa/codenotch'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate project
+        run: make gen
+      - name: Test pool integration and tooltip rendering
+        run: >-
+          xcodebuild -project Codenotch.xcodeproj -scheme Codenotch
+          -destination 'platform=macOS,arch=arm64' -configuration Debug
+          -derivedDataPath build/homelab CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+          CODE_SIGN_STYLE=Automatic
+          -only-testing:CodenotchTests/CCSQuotaProviderTests
+          -only-testing:CodenotchTests/TooltipRenderTests
+          -only-testing:CodenotchTests/UpdaterOutcomeTests test
+      - name: Archive application
+        run: ditto -c -k --sequesterRsrc --keepParent build/homelab/Build/Products/Debug/Codenotch.app Codenotch-homelab.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Codenotch-homelab-${{ github.sha }}
+          path: Codenotch-homelab.zip
+          retention-days: 14

@@ -458,3 +458,51 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [MIT](LICENSE) © 2026 Vinz
+
+## CCS homelab accounts (local integration)
+
+This build can display Claude subscription quotas from a remote CCS dashboard.
+Each pool has its own ring, labelled with the pool name, with per-account session and weekly
+windows when CCS reports them. This reads subscription limits, not an API bill
+or a measure of which account is currently executing a request. Empty quota
+responses stay unavailable rather than displaying an invented zero.
+
+Create `~/.config/codenotch/ccs.json`, then relaunch Codenotch:
+
+```json
+{
+  "dashboardURL": "http://your-private-ccs-host:3456",
+  "credentialsFile": "~/.config/codenotch/ccs-credentials.json",
+  "accounts": [
+    {"email": "work@example.com", "pool": "Work", "name": "Primary"},
+    {"email": "personal@example.com", "pool": "Personal", "name": "Primary"}
+  ]
+}
+```
+
+The credentials file contains `username` and `password` for the CCS dashboard.
+Protect it with mode `0600`. These are dashboard credentials, with the dashboard's
+permissions, not a read-only scoped token. Claude OAuth tokens stay on CCS.
+Use HTTPS or a private encrypted network such as Tailscale. Credentials are
+never forwarded through HTTP redirects. The dashboard session is held only in
+memory and shared by all pools. Results are cached for two minutes;
+CCS may also serve cached data. Authentication failures back off for 15 minutes.
+
+Enable the pool rows in **Settings → Accounts**.
+The configuration's account membership/order is explicit; changes to pools on
+CCS must also be reflected here. Existing local providers are unchanged.
+
+Build with the normal `make build` instructions. Fork builds disable the official
+Sparkle updater so it cannot replace these adaptations. See [FORK.md](FORK.md)
+for the upstream merge and build procedure.
+
+CCS tooltips use the pool name with a separate group for each account and show usage pace for known
+five-hour and seven-day windows. They show every window returned by CCS; CCS
+may omit model-specific windows exposed by Claude's own usage response. Plan,
+token history, project breakdowns and local sessions are not provided by this
+endpoint and are not attributed to remote accounts.
+
+CCS accounts are grouped into one ring per pool, preserving configuration order.
+Hover the pool to see each account's quota windows and reset times. Unavailable
+accounts remain visible. Pool rings show their names rather than an average of
+percentages from subscriptions with different capacities.

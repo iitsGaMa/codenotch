@@ -68,9 +68,13 @@ final class Updater: NSObject, ObservableObject, SPUUpdaterDelegate {
     /// Mirrors the preference, so switching it off really does stop the checks
     /// rather than only hiding them. Never downloads unasked: what is found is
     /// offered in the notch first.
+    private var isHomelabFork: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "HomelabFork") as? Bool == true
+    }
+
     var automatic: Bool {
-        get { sparkle.automaticallyChecksForUpdates }
-        set { sparkle.automaticallyChecksForUpdates = newValue }
+        get { !isHomelabFork && sparkle.automaticallyChecksForUpdates }
+        set { sparkle.automaticallyChecksForUpdates = !isHomelabFork && newValue }
     }
 
     var currentVersion: String {
@@ -84,6 +88,7 @@ final class Updater: NSObject, ObservableObject, SPUUpdaterDelegate {
     /// updater is lazy so that `self` exists before it is handed over as the
     /// delegate.
     func start() {
+        guard !isHomelabFork else { return }
         guard !started else { return }
         started = true
         sparkle.automaticallyDownloadsUpdates = false
@@ -218,6 +223,10 @@ final class Updater: NSObject, ObservableObject, SPUUpdaterDelegate {
     /// This one *does* show UI — it was asked for, so silence would read as a
     /// broken button.
     func checkNow() {
+        guard !isHomelabFork else {
+            outcome = .failed(L10n.t("This fork is updated from github.com/iitsGaMa/codenotch after merging upstream changes."))
+            return
+        }
         start()
         outcome = .checking
         sparkle.checkForUpdates()
