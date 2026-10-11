@@ -41,3 +41,9 @@ y compris la vérification manuelle. Une mise à jour du fork nécessite une fus
 un build et une installation. Aucun serveur de mise à jour automatique spécifique
 au fork n'est configuré. Les autres workflows upstream restent désactivés côté
 GitHub ; seul le build manuel du fork est activé.
+
+## Dépenses supplémentaires
+
+Les montants proviennent du champ `spend` de Claude, avec sa devise et son unité.
+Le plafond de dépenses ne représente pas des crédits achetés. Un solde absent
+reste non communiqué ; les champs internes non identifiés ne sont pas utilisés.

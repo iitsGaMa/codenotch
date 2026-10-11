@@ -161,6 +161,7 @@ struct CCSQuotaReading {
                 let resetAt: String?
             }
             let success: Bool
+            let credits: CCSCredits?
             let accountId: String?
             let windows: [Window]?
             let lastUpdated: Double?
@@ -176,7 +177,7 @@ struct CCSQuotaReading {
         let dates = ISO8601DateFormatter()
         dates.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plainDates = ISO8601DateFormatter()
-        let windows = try values.map { value -> LimitWindow in
+        var windows = try values.map { value -> LimitWindow in
             guard let percent = value.usedPercent, percent.isFinite, percent >= 0 else {
                 throw UsageProviderError.badResponse(status: 502)
             }
@@ -193,6 +194,7 @@ struct CCSQuotaReading {
                                    : value.rateLimitType == "seven_day" || value.rateLimitType.hasPrefix("seven_day_")
                                        ? 7 * 86400 : nil)
         }
+        windows += reply.credits?.windows ?? []
         return Self(windows: windows, updatedAt: Date(timeIntervalSince1970: updated / 1000))
     }
 }
@@ -240,7 +242,7 @@ struct CCSQuotaProvider: UsageProvider {
             }
             windows += (reading?.windows ?? []).map { window in
                 LimitWindow(id: account.id + ":" + window.id, group: title, label: window.label,
-                            usedFraction: window.usedFraction, resetsAt: window.resetsAt,
+                            usedFraction: window.usedFraction, detail: window.detail, resetsAt: window.resetsAt,
                             duration: window.duration)
             }
             if let usage = history?.first(where: { $0.accountId == account.email }) {
@@ -293,5 +295,45 @@ struct CCSUsageSummary: Decodable, Equatable {
         }
         return Self(accountId: "pool", firstRecordedAt: accounts.map(\.firstRecordedAt).min()!,
                     lastRecordedAt: accounts.map(\.lastRecordedAt).max()!, days: days.values.sorted { $0.day < $1.day })
+    }
+}
+
+/// Amounts explicitly returned by Claude; a spending cap is not wallet funding.
+struct CCSCredits: Decodable {
+    struct Amount: Decodable {
+        let value: Double
+        let currency: String
+        var text: String {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .currency
+            formatter.currencyCode = currency
+            formatter.locale = L10n.locale
+            return formatter.string(from: NSNumber(value: value)) ?? "\(value) \(currency)"
+        }
+    }
+    let enabled: Bool?
+    let reason: String?
+    let used: Amount?
+    let limit: Amount?
+    let balance: Amount?
+    var windows: [LimitWindow] {
+        var result: [LimitWindow] = []
+        if enabled == false {
+            result.append(LimitWindow(id: "credits-state", label: L10n.t("Extra usage credits"),
+                                      detail: reason == "out_of_credits" ? L10n.t("Unavailable") : L10n.t("Disabled")))
+        } else if let used, let limit, limit.value > 0, used.currency == limit.currency {
+            result.append(LimitWindow(id: "credits-spend", label: L10n.t("Extra usage spending"),
+                                      usedFraction: used.value / limit.value,
+                                      detail: L10n.t("Spent / cap") + " · " + used.text + " / " + limit.text))
+        } else {
+            if let used { result.append(LimitWindow(id: "credits-used", label: L10n.t("Extra usage spent"), detail: used.text)) }
+            if let limit { result.append(LimitWindow(id: "credits-limit", label: L10n.t("Spending cap"), detail: limit.text)) }
+        }
+        if let balance {
+            result.append(LimitWindow(id: "credits-balance", label: L10n.t("Credit balance"), detail: balance.text))
+        } else if enabled == true {
+            result.append(LimitWindow(id: "credits-balance", label: L10n.t("Credit balance"), detail: L10n.t("Not reported")))
+        }
+        return result
     }
 }

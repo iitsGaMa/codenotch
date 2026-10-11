@@ -48,6 +48,15 @@ final class CCSQuotaProviderTests: XCTestCase {
         try png.write(to: URL(fileURLWithPath: "/tmp/codenotch-pool-preview.png"))
     }
 
+    func testCreditsKeepSpendingCapSeparateFromUnknownBalance() throws {
+        let data = Data(#"{"success":true,"accountId":"one@example.com","lastUpdated":1791743749904,"windows":[],"credits":{"enabled":true,"used":{"value":80.19,"currency":"EUR"},"limit":{"value":80,"currency":"EUR"}}}"#.utf8)
+        let windows = try CCSQuotaReading.parse(data, expectedAccount: "one@example.com").windows
+        XCTAssertEqual(windows.count, 2)
+        XCTAssertEqual(windows[0].usedFraction!, 80.19 / 80, accuracy: 0.0001)
+        XCTAssertEqual(windows[1].detail, L10n.t("Not reported"))
+        XCTAssertNil(windows[1].usedFraction)
+    }
+
     func testUnavailableQuotaNeverBecomesAnEmptyAccount() throws {
         let data = Data(#"{"success":false,"accountId":"one@example.com","error":"unauthorized"}"#.utf8)
         XCTAssertThrowsError(try CCSQuotaReading.parse(data, expectedAccount: "one@example.com")) { error in

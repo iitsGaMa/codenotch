@@ -55768,6 +55768,12 @@
             "state": "translated",
             "value": "點數餘額"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solde de crédits"
+          }
         }
       }
     },
@@ -59976,6 +59982,83 @@
           "stringUnit": {
             "state": "translated",
             "value": "Requêtes · 30 j"
+          }
+        }
+      }
+    },
+    "Extra usage credits": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crédits supplémentaires"
+          }
+        }
+      }
+    },
+    "Disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactivés"
+          }
+        }
+      }
+    },
+    "Extra usage spending": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépenses supplémentaires"
+          }
+        }
+      }
+    },
+    "Spent / cap": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépensé / plafond"
+          }
+        }
+      }
+    },
+    "Extra usage spent": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépenses supplémentaires"
+          }
+        }
+      }
+    },
+    "Spending cap": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plafond de dépenses"
+          }
+        }
+      }
+    },
+    "Not reported": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non communiqué"
           }
         }
       }
