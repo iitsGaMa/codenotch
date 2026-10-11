@@ -497,10 +497,12 @@ Sparkle updater so it cannot replace these adaptations. See [FORK.md](FORK.md)
 for the upstream merge and build procedure.
 
 CCS tooltips use the pool name with a separate group for each account and show usage pace for known
-five-hour and seven-day windows. They show every window returned by CCS; CCS
-may omit model-specific windows exposed by Claude's own usage response. Plan,
-token history, project breakdowns and local sessions are not provided by this
-endpoint and are not attributed to remote accounts.
+five-hour and seven-day windows. The CCS fork supplies Claude's named quota windows, including scoped model limits.
+The optional `/api/bar/account-history` endpoint supplies recorded proxy tokens,
+API-price estimates and daily buckets, attributed to the actual account. Pool
+charts cover 30 UTC calendar days; requests outside this proxy are not included.
+Missing history remains unavailable rather than being inferred from quota.
+Plan, project breakdowns and local sessions are not provided by these endpoints.
 
 CCS accounts are grouped into one ring per pool, preserving configuration order.
 Hover the pool to see each account's quota windows and reset times. Unavailable

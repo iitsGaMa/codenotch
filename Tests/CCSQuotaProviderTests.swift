@@ -23,18 +23,20 @@ final class CCSQuotaProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.displayName, "Animou")
         XCTAssertEqual(snapshot.headlineText, "Animou")
         XCTAssertEqual(snapshot.windows.first?.group, "One")
-        XCTAssertEqual(snapshot.windows.map(\.group), ["One", "One", "Two", "Two", "Missing"])
+        XCTAssertEqual(snapshot.windows.map(\.group), ["One", "One", "One", "Two", "Two", "Two", "Missing", "Missing"])
         XCTAssertNil(snapshot.windows.last?.usedFraction)
         XCTAssertEqual(snapshot.windows.last?.detail, L10n.t("Unavailable"))
+        XCTAssertEqual(snapshot.ccsUsage?.tokens, 120)
+        XCTAssertEqual(snapshot.ccsUsage?.cost, 0.2)
         XCTAssertNil(snapshot.usedFraction)
         XCTAssertEqual(snapshot.windows.first?.usedFraction, 0.25)
-        XCTAssertEqual(snapshot.windows[3].usedFraction, 0.7)
+        XCTAssertEqual(snapshot.windows[4].usedFraction, 0.7)
         XCTAssertNotNil(snapshot.windows.first?.resetsAt)
         XCTAssertNil(snapshot.weeklyID)
         XCTAssertEqual(snapshot.windows.first?.label, L10n.t("Current session"))
-        XCTAssertEqual(snapshot.windows[3].label, L10n.t("All models"))
+        XCTAssertEqual(snapshot.windows[4].label, L10n.t("All models"))
         XCTAssertEqual(snapshot.windows.first?.duration, 5 * 3600)
-        XCTAssertEqual(snapshot.windows[3].duration, 7 * 86400)
+        XCTAssertEqual(snapshot.windows[4].duration, 7 * 86400)
         XCTAssertEqual(snapshot.status, .ok)
         XCTAssertEqual(CCSStub.paths.filter { $0 == "/api/auth/login" }.count, 1)
         XCTAssertEqual(CCSStub.paths.filter { $0.hasSuffix("one@example.com") }.count, 1)
@@ -68,6 +70,8 @@ private final class CCSStub: URLProtocol, @unchecked Sendable {
         let body: String
         if request.url!.path == "/api/auth/login" {
             body = #"{"success":true}"#
+        } else if request.url!.lastPathComponent == "account-history" {
+            body = #"{"accounts":[{"accountId":"one@example.com","firstRecordedAt":"2026-10-11T00:00:00Z","lastRecordedAt":"2026-10-11T01:00:00Z","days":[{"day":"2026-10-11","tokens":120,"cost":0.2,"requests":2}]},{"accountId":"unrelated@example.com","firstRecordedAt":"2026-10-11T00:00:00Z","lastRecordedAt":"2026-10-11T01:00:00Z","days":[{"day":"2026-10-11","tokens":999,"cost":99,"requests":99}]}]}"#
         } else if request.url!.lastPathComponent == "missing@example.com" {
             body = #"{"success":false}"#
         } else {

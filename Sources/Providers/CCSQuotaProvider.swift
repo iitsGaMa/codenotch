@@ -59,6 +59,7 @@ actor CCSQuotaClient {
     private let session: URLSession
     private let redirects = CCSNoRedirects()
     private var loginTask: Task<Void, Error>?
+    private var historyCache: (date: Date, accounts: [CCSUsageSummary])?
     private var authenticated = false
     private var loginRetryAfter = Date.distantPast
     private var cache: [String: (date: Date, data: Data)] = [:]
@@ -111,6 +112,16 @@ actor CCSQuotaClient {
             loginRetryAfter = Date().addingTimeInterval(15 * 60)
             throw error
         }
+    }
+
+    func history() async throws -> [CCSUsageSummary] {
+        if let held = historyCache, Date().timeIntervalSince(held.date) < 120 { return held.accounts }
+        try await login()
+        struct Reply: Decodable { let accounts: [CCSUsageSummary] }
+        let data = try await request(URLRequest(url: configuration.dashboardURL.appendingPathComponent("api/bar/account-history")))
+        let accounts = try JSONDecoder().decode(Reply.self, from: data).accounts
+        historyCache = (Date(), accounts)
+        return accounts
     }
 
     func quota(for email: String) async throws -> Data {
@@ -217,25 +228,70 @@ struct CCSQuotaProvider: UsageProvider {
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
+        let history = try? await client.history()
         var windows: [LimitWindow] = []
         for (index, reading) in readings {
             let account = accounts[index]
             let stale = reading.map { Date().timeIntervalSince($0.updatedAt) > 15 * 60 } ?? false
             let title = account.name + (stale ? " · " + L10n.t("Stale") : "")
-            guard let reading, !reading.windows.isEmpty else {
+            if reading?.windows.isEmpty != false {
                 windows.append(LimitWindow(id: account.id, group: title,
                                            label: L10n.t("Quota"), detail: L10n.t("Unavailable")))
-                continue
             }
-            windows += reading.windows.map { window in
+            windows += (reading?.windows ?? []).map { window in
                 LimitWindow(id: account.id + ":" + window.id, group: title, label: window.label,
                             usedFraction: window.usedFraction, resetsAt: window.resetsAt,
                             duration: window.duration)
             }
+            if let usage = history?.first(where: { $0.accountId == account.email }) {
+                let detail = UsageFormat.tokens(usage.tokens) + " tok · " + usage.costText
+                windows.append(LimitWindow(id: account.id + ":usage", group: title,
+                                           label: L10n.t("Recorded · 30d"), detail: detail))
+            } else {
+                windows.append(LimitWindow(id: account.id + ":usage", group: title,
+                                           label: L10n.t("History"), detail: L10n.t("Unavailable")))
+            }
         }
+        let members = history?.filter { item in accounts.contains { $0.email == item.accountId } }
+        let usage = members.flatMap { CCSUsageSummary.pool($0) }
         // Different subscriptions do not have a common quota denominator.
         // Keep the ring neutral and show each real percentage inside its group.
         return ProviderSnapshot(id: id, displayName: pool, glyph: glyph, fidelity: .official,
-                                status: .ok, windows: windows, headlineID: "pool")
+                                status: .ok, windows: windows, headlineID: "pool", tokenUsage: usage?.chart,
+                                ccsUsage: usage)
+    }
+}
+
+/// UTC daily totals from recorded proxy requests, not subscription billing.
+struct CCSUsageSummary: Decodable, Equatable {
+    struct Day: Decodable, Equatable {
+        let day: String
+        var tokens: Int
+        var cost: Double
+        var requests: Int
+    }
+    let accountId: String
+    let firstRecordedAt: String
+    let lastRecordedAt: String
+    let days: [Day]
+    var tokens: Int { days.reduce(0) { $0 + $1.tokens } }
+    var cost: Double { days.reduce(0) { $0 + $1.cost } }
+    var requests: Int { days.reduce(0) { $0 + $1.requests } }
+    var costText: String { String(format: "~$%.2f", cost) }
+    var chart: CodexTokenUsage {
+        CodexTokenUsage(dailyUsageBuckets: days.map { .init(startDate: $0.day, tokens: $0.tokens) })
+    }
+    static func pool(_ accounts: [Self]) -> Self? {
+        guard !accounts.isEmpty else { return nil }
+        var days: [String: Day] = [:]
+        for account in accounts {
+            for day in account.days {
+                let held = days[day.day] ?? Day(day: day.day, tokens: 0, cost: 0, requests: 0)
+                days[day.day] = Day(day: day.day, tokens: held.tokens + day.tokens,
+                                    cost: held.cost + day.cost, requests: held.requests + day.requests)
+            }
+        }
+        return Self(accountId: "pool", firstRecordedAt: accounts.map(\.firstRecordedAt).min()!,
+                    lastRecordedAt: accounts.map(\.lastRecordedAt).max()!, days: days.values.sorted { $0.day < $1.day })
     }
 }

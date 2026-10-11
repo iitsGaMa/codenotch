@@ -900,9 +900,15 @@ private struct UsageResetCreditsSection: View {
 private struct CodexUsageSection: View {
     let usage: CodexTokenUsage
     let now: Date
+    var remoteUsage: CCSUsageSummary? = nil
+    private var calendar: Calendar {
+        var value = Calendar.current
+        if remoteUsage != nil { value.timeZone = TimeZone(secondsFromGMT: 0)! }
+        return value
+    }
 
     private var buckets: [CodexTokenUsage.DailyBucket] {
-        usage.last30Days(now: now)
+        usage.last30Days(now: now, calendar: calendar)
     }
 
     private var maximum: Int {
@@ -910,10 +916,21 @@ private struct CodexUsageSection: View {
     }
 
     private var todayText: String {
-        usage.usageToday(now: now).map { UsageFormat.tokens($0) } ?? L10n.t("Pending")
+        usage.usageToday(now: now, calendar: calendar).map { UsageFormat.tokens($0) } ?? L10n.t("Pending")
     }
 
     private var metrics: [CodexMetric] {
+        if let remoteUsage {
+            let today = ISO8601DateFormatter().string(from: now).prefix(10)
+            let todayCost = remoteUsage.days.first { $0.day == today }?.cost ?? 0
+            return [
+                CodexMetric(id: "source", value: String(remoteUsage.lastRecordedAt.prefix(16)).replacingOccurrences(of: "T", with: " "), label: "Proxy · UTC"),
+                CodexMetric(id: "since", value: String(remoteUsage.firstRecordedAt.prefix(10)), label: L10n.t("First record")),
+                CodexMetric(id: "today-cost", value: String(format: "~$%.2f", todayCost), label: L10n.t("API estimate · today")),
+                CodexMetric(id: "cost", value: remoteUsage.costText, label: L10n.t("API estimate · 30d")),
+                CodexMetric(id: "requests", value: String(remoteUsage.requests), label: L10n.t("Recorded requests · 30d"))
+            ]
+        }
         let summary = usage.summary
         return [
             CodexMetric(id: "lifetime", value: UsageFormat.tokens(summary?.lifetimeTokens),
@@ -947,7 +964,7 @@ private struct CodexUsageSection: View {
             SplitRow(leading: L10n.t("Today"), trailing: todayText)
                 .padding(.top, NotchLayout.blockSpacing)
             SplitRow(leading: L10n.t("30-day tokens"),
-                     trailing: UsageFormat.tokens(usage.usageInLast30Days(now: now)))
+                     trailing: UsageFormat.tokens(usage.usageInLast30Days(now: now, calendar: calendar)))
                 .padding(.top, NotchLayout.codexUsageRowGap)
             CodexDailyUsageChart(buckets: buckets, maximum: maximum)
                 .padding(.top, NotchLayout.codexChartTop)
@@ -1150,7 +1167,7 @@ struct TooltipCard: View {
                         UsageResetCreditsSection(credits: resetCredits, now: now)
                     }
                     if let tokenUsage = snapshot.tokenUsage {
-                        CodexUsageSection(usage: tokenUsage, now: now)
+                        CodexUsageSection(usage: tokenUsage, now: now, remoteUsage: snapshot.ccsUsage)
                     } else if let history = snapshot.customUsageHistory {
                         CodexUsageSection(usage: history.codexUsage, now: now)
                     }
