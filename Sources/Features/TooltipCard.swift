@@ -1156,15 +1156,12 @@ struct TooltipCard: View {
 
     var body: some View {
         TooltipShell(height: min(height, maximumHeight), direction: direction, tailOffset: tailOffset) {
-            if height > maximumHeight {
-                ScrollView(.vertical) {
-                    cardContent
-                }
-                .frame(height: max(1, maximumHeight - 2 * NotchLayout.cardPadding))
-                .id(snapshot.id)
-            } else {
-                cardContent
+            ScrollView(.vertical) {
+                cardContent.fixedSize(horizontal: false, vertical: true)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: max(1, min(height, maximumHeight) - 2 * NotchLayout.cardPadding))
+            .id(snapshot.id)
         }
     }
 

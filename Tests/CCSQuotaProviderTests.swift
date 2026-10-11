@@ -21,22 +21,23 @@ final class CCSQuotaProviderTests: XCTestCase {
         let snapshot = try await provider.fetchSnapshot()
         _ = try await provider.fetchSnapshot()
         XCTAssertEqual(snapshot.displayName, "Animou")
+        XCTAssertEqual(snapshot.windows[1].detail, "2 / 3")
         XCTAssertEqual(snapshot.headlineText, "Animou")
-        XCTAssertEqual(snapshot.windows.first?.group, "One")
-        XCTAssertEqual(snapshot.windows.map(\.group), ["One", "One", "One", "Two", "Two", "Two", "Missing", "Missing"])
+        XCTAssertEqual(snapshot.windows.dropFirst(2).first?.group, "One")
+        XCTAssertEqual(snapshot.windows.dropFirst(2).map(\.group), ["One", "One", "One", "Two", "Two", "Two", "Missing", "Missing", "Missing"])
         XCTAssertNil(snapshot.windows.last?.usedFraction)
         XCTAssertEqual(snapshot.windows.last?.detail, L10n.t("Unavailable"))
         XCTAssertEqual(snapshot.ccsUsage?.tokens, 120)
         XCTAssertEqual(snapshot.ccsUsage?.cost, 0.2)
-        XCTAssertNil(snapshot.usedFraction)
-        XCTAssertEqual(snapshot.windows.first?.usedFraction, 0.25)
-        XCTAssertEqual(snapshot.windows[4].usedFraction, 0.7)
-        XCTAssertNotNil(snapshot.windows.first?.resetsAt)
+        XCTAssertEqual(snapshot.usedFraction, 0.5)
+        XCTAssertEqual(snapshot.windows.dropFirst(2).first?.usedFraction, 0.25)
+        XCTAssertEqual(snapshot.windows[6].usedFraction, 0.7)
+        XCTAssertNotNil(snapshot.windows.dropFirst(2).first?.resetsAt)
         XCTAssertNil(snapshot.weeklyID)
-        XCTAssertEqual(snapshot.windows.first?.label, L10n.t("Current session"))
-        XCTAssertEqual(snapshot.windows[4].label, L10n.t("All models"))
-        XCTAssertEqual(snapshot.windows.first?.duration, 5 * 3600)
-        XCTAssertEqual(snapshot.windows[4].duration, 7 * 86400)
+        XCTAssertEqual(snapshot.windows.dropFirst(2).first?.label, L10n.t("Current session"))
+        XCTAssertEqual(snapshot.windows[6].label, L10n.t("All models"))
+        XCTAssertEqual(snapshot.windows.dropFirst(2).first?.duration, 5 * 3600)
+        XCTAssertEqual(snapshot.windows[6].duration, 7 * 86400)
         XCTAssertEqual(snapshot.status, .ok)
         XCTAssertEqual(CCSStub.paths.filter { $0 == "/api/auth/login" }.count, 1)
         XCTAssertEqual(CCSStub.paths.filter { $0.hasSuffix("one@example.com") }.count, 1)
@@ -52,6 +53,22 @@ final class CCSQuotaProviderTests: XCTestCase {
             .environment(\.notchSurfaceStyle, .solid))
         let limitedImage = try XCTUnwrap(limited.cgImage)
         XCTAssertEqual(limitedImage.height, 400)
+        let host = NSHostingView(rootView: TooltipCard(snapshot: snapshot, maximumHeight: 400,
+                                                       now: Date(), direction: .trailing))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        func scrollView(in view: NSView) -> NSScrollView? {
+            if let scroll = view as? NSScrollView { return scroll }
+            return view.subviews.lazy.compactMap { scrollView(in: $0) }.first
+        }
+        let scroll = try XCTUnwrap(scrollView(in: host))
+        let document = try XCTUnwrap(scroll.documentView)
+        XCTAssertGreaterThan(document.frame.height, scroll.contentView.bounds.height)
+        document.scroll(NSPoint(x: 0, y: 150))
+        XCTAssertGreaterThan(scroll.contentView.bounds.origin.y, 0)
+
 
     }
 
@@ -93,7 +110,7 @@ private final class CCSStub: URLProtocol, @unchecked Sendable {
         } else {
             body = """
             {"success":true,"accountId":"\(request.url!.lastPathComponent)","lastUpdated":\(Date().timeIntervalSince1970 * 1000),
-             "windows":[{"rateLimitType":"five_hour","label":"Session limit","usedPercent":25,"resetAt":"2026-10-12T00:00:00.000Z"},
+             "windows":[{"rateLimitType":"five_hour","label":"Session limit","usedPercent":\(request.url!.lastPathComponent == "two@example.com" ? 75 : 25),"resetAt":"2026-10-12T00:00:00.000Z"},
                         {"rateLimitType":"seven_day","label":"Weekly limit","usedPercent":70,"resetAt":"2026-10-16T00:00:00Z"}]}
             """
         }

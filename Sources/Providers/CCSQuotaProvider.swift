@@ -151,6 +151,7 @@ actor CCSQuotaClient {
 struct CCSQuotaReading {
     let windows: [LimitWindow]
     let updatedAt: Date
+    let plan: CCSPlan?
 
     static func parse(_ data: Data, expectedAccount: String) throws -> Self {
         struct Reply: Decodable {
@@ -162,6 +163,7 @@ struct CCSQuotaReading {
             }
             let success: Bool
             let credits: CCSCredits?
+            let plan: CCSPlan?
             let accountId: String?
             let windows: [Window]?
             let lastUpdated: Double?
@@ -195,7 +197,7 @@ struct CCSQuotaReading {
                                        ? 7 * 86400 : nil)
         }
         windows += reply.credits?.windows ?? []
-        return Self(windows: windows, updatedAt: Date(timeIntervalSince1970: updated / 1000))
+        return Self(windows: windows, updatedAt: Date(timeIntervalSince1970: updated / 1000), plan: reply.plan)
     }
 }
 
@@ -236,6 +238,14 @@ struct CCSQuotaProvider: UsageProvider {
             let account = accounts[index]
             let stale = reading.map { Date().timeIntervalSince($0.updatedAt) > 15 * 60 } ?? false
             let title = account.name + (stale ? " · " + L10n.t("Stale") : "")
+            if let plan = reading?.plan?.label {
+                windows.append(LimitWindow(id: account.id + ":plan", group: title,
+                                           label: L10n.t("Plan"), detail: plan))
+            }
+            if reading?.windows.first(where: { $0.id == "five_hour" }) == nil {
+                windows.append(LimitWindow(id: account.id + ":session-unknown", group: title,
+                                           label: L10n.t("Current session"), detail: L10n.t("Unavailable")))
+            }
             if reading?.windows.isEmpty != false {
                 windows.append(LimitWindow(id: account.id, group: title,
                                            label: L10n.t("Quota"), detail: L10n.t("Unavailable")))
@@ -256,8 +266,18 @@ struct CCSQuotaProvider: UsageProvider {
         }
         let members = history?.filter { item in accounts.contains { $0.email == item.accountId } }
         let usage = members.flatMap { CCSUsageSummary.pool($0) }
-        // Different subscriptions do not have a common quota denominator.
-        // Keep the ring neutral and show each real percentage inside its group.
+        // Equal-weight session average: an indicator, not a shared token budget.
+        let sessions = readings.compactMap { _, reading -> Double? in
+            guard let reading, Date().timeIntervalSince(reading.updatedAt) <= 15 * 60 else { return nil }
+            return reading.windows.first(where: { $0.id == "five_hour" })?.usedFraction.map { min(1, max(0, $0)) }
+        }
+        let average = sessions.isEmpty ? nil : sessions.reduce(0, +) / Double(sessions.count)
+        windows.insert(LimitWindow(id: "pool", group: L10n.t("Pool estimate"),
+                                   label: L10n.t("Average session usage"), usedFraction: average,
+                                   detail: average == nil ? L10n.t("Unavailable") : nil), at: 0)
+        windows.insert(LimitWindow(id: "pool-coverage", group: L10n.t("Pool estimate"),
+                                   label: L10n.t("Known session quotas"),
+                                   detail: "\(sessions.count) / \(accounts.count)"), at: 1)
         return ProviderSnapshot(id: id, displayName: pool, glyph: glyph, fidelity: .official,
                                 status: .ok, windows: windows, headlineID: "pool", tokenUsage: usage?.chart,
                                 ccsUsage: usage)
@@ -335,5 +355,26 @@ struct CCSCredits: Decodable {
             result.append(LimitWindow(id: "credits-balance", label: L10n.t("Credit balance"), detail: L10n.t("Not reported")))
         }
         return result
+    }
+}
+
+struct CCSPlan: Decodable {
+    let organizationType: String?
+    let rateLimitTier: String?
+    var label: String? {
+        let base: String
+        switch organizationType {
+        case "claude_team": base = "Team"
+        case "claude_enterprise": base = "Enterprise"
+        case "claude_max": base = "Max"
+        case "claude_pro": base = "Pro"
+        case "claude_free": base = "Free"
+        default: return nil
+        }
+        switch rateLimitTier {
+        case "default_claude_max_5x": return base + " · 5×"
+        case "default_claude_max_20x": return base + " · 20×"
+        default: return base
+        }
     }
 }

@@ -60062,6 +60062,36 @@
           }
         }
       }
+    },
+    "Pool estimate": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimation du pool"
+          }
+        }
+      }
+    },
+    "Average session usage": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consommation moyenne · session"
+          }
+        }
+      }
+    },
+    "Known session quotas": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quotas de session connus"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
