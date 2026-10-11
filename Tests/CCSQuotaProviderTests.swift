@@ -72,6 +72,15 @@ final class CCSQuotaProviderTests: XCTestCase {
 
     }
 
+    func testCloudCreditsShowBalanceAndSuppressExpiredOrLockedAmounts() {
+        let credits = CCSCloudCredits(remainingDollars: 250, expiresAt: "2026-11-05T07:59:00.000Z", locked: false)
+        let before = Date(timeIntervalSince1970: 1791740000)
+        XCTAssertEqual(credits.windows(now: before)[0].detail, CCSCredits.Amount(value: 250, currency: "USD").text)
+        XCTAssertEqual(credits.windows(now: .distantFuture)[0].detail, L10n.t("Expired"))
+        XCTAssertEqual(CCSCloudCredits(remainingDollars: 250, expiresAt: nil, locked: true)
+            .windows(now: before)[0].detail, L10n.t("Unavailable"))
+    }
+
     func testCreditsKeepSpendingCapSeparateFromUnknownBalance() throws {
         let data = Data(#"{"success":true,"accountId":"one@example.com","lastUpdated":1791743749904,"windows":[],"credits":{"enabled":true,"used":{"value":80.19,"currency":"EUR"},"limit":{"value":80,"currency":"EUR"}}}"#.utf8)
         let windows = try CCSQuotaReading.parse(data, expectedAccount: "one@example.com").windows

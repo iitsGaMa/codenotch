@@ -163,6 +163,7 @@ struct CCSQuotaReading {
             }
             let success: Bool
             let credits: CCSCredits?
+            let cloudCredits: CCSCloudCredits?
             let plan: CCSPlan?
             let accountId: String?
             let windows: [Window]?
@@ -197,6 +198,7 @@ struct CCSQuotaReading {
                                        ? 7 * 86400 : nil)
         }
         windows += reply.credits?.windows ?? []
+        windows += reply.cloudCredits?.windows(now: Date()) ?? []
         return Self(windows: windows, updatedAt: Date(timeIntervalSince1970: updated / 1000), plan: reply.plan)
     }
 }
@@ -376,5 +378,30 @@ struct CCSPlan: Decodable {
         case "default_claude_max_20x": return base + " · 20×"
         default: return base
         }
+    }
+}
+
+/// Promotional cloud-session credits, separate from API Console funding.
+struct CCSCloudCredits: Decodable {
+    let remainingDollars: Double
+    let expiresAt: String?
+    let locked: Bool
+
+    func windows(now: Date) -> [LimitWindow] {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let expiry = expiresAt.flatMap { iso.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) }
+        let expired = expiry.map { $0 <= now } ?? false
+        let balance = expired ? L10n.t("Expired") : locked ? L10n.t("Unavailable")
+            : CCSCredits.Amount(value: remainingDollars, currency: "USD").text
+        var rows = [LimitWindow(id: "cloud-credits", label: L10n.t("Cloud credits"), detail: balance)]
+        if let expiry {
+            let date = DateFormatter()
+            date.locale = L10n.locale
+            date.dateStyle = .medium
+            date.timeStyle = .short
+            rows.append(LimitWindow(id: "cloud-expiry", label: L10n.t("Expiration"), detail: date.string(from: expiry)))
+        }
+        return rows
     }
 }

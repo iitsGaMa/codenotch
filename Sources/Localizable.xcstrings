@@ -60092,6 +60092,36 @@
           }
         }
       }
+    },
+    "Cloud credits": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crédits Cloud"
+          }
+        }
+      }
+    },
+    "Expiration": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expiration"
+          }
+        }
+      }
+    },
+    "Expired": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expirés"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

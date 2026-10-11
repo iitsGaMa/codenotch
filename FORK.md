@@ -47,3 +47,8 @@ GitHub ; seul le build manuel du fork est activé.
 Les montants proviennent du champ `spend` de Claude, avec sa devise et son unité.
 Le plafond de dépenses ne représente pas des crédits achetés. Un solde absent
 reste non communiqué ; les champs internes non identifiés ne sont pas utilisés.
+
+Le champ `iguana_necktie` est affiché séparément comme crédits promotionnels Cloud,
+suivant l’interprétation de [CodexBar](https://github.com/steipete/CodexBar/blob/79831b47517f3e3e340886be63157f582ab13d41/Sources/CodexBarCore/Providers/Claude/ClaudeCloudCreditsSnapshot.swift).
+Ses montants sont déjà en USD et sa date est une expiration, pas une remise à zéro.
+Ils ne sont additionnés ni au solde Console ni aux quotas du pool.
