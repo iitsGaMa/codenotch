@@ -95,6 +95,21 @@ final class CCSQuotaProviderTests: XCTestCase {
         XCTAssertNil(windows[1].usedFraction)
     }
 
+    func testScopedModelWindowsFromCCS811KeepModelNameAndDropUnknownScopes() throws {
+        let data = Data(#"""
+        {"success":true,"accountId":"one@example.com","lastUpdated":1760000000000,"windows":[
+         {"rateLimitType":"five_hour","label":"Session limit","usedPercent":0,"resetAt":null,"scope":"account","cadence":"5h"},
+         {"rateLimitType":"weekly_scoped:fable","label":"Fable weekly limit","usedPercent":12,"resetAt":"2026-11-10T00:00:00Z","scope":"model","cadence":"weekly","modelLabel":"Fable"},
+         {"rateLimitType":"seven_day_cowork","label":"Cowork limit","usedPercent":3,"resetAt":"2026-11-10T00:00:00Z","scope":"unknown"}]}
+        """#.utf8)
+        let windows = try CCSQuotaReading.parse(data, expectedAccount: "one@example.com").windows
+        XCTAssertEqual(windows.map(\.id), ["five_hour", "weekly_scoped:fable"])
+        XCTAssertEqual(windows[0].duration, 5 * 3600)
+        XCTAssertNil(windows[0].resetsAt)
+        XCTAssertEqual(windows[1].label, "Fable")
+        XCTAssertEqual(windows[1].duration, 7 * 86400)
+    }
+
     func testUnavailableQuotaNeverBecomesAnEmptyAccount() throws {
         let data = Data(#"{"success":false,"accountId":"one@example.com","error":"unauthorized"}"#.utf8)
         XCTAssertThrowsError(try CCSQuotaReading.parse(data, expectedAccount: "one@example.com")) { error in

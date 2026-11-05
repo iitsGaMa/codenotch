@@ -177,6 +177,10 @@ struct CCSQuotaReading {
                 let label: String
                 let usedPercent: Double?
                 let resetAt: String?
+                /// CCS 8.11+: "account", "model" or "unknown"; absent before.
+                let scope: String?
+                let cadence: String?
+                let modelLabel: String?
             }
             let success: Bool
             let credits: CCSCredits?
@@ -197,8 +201,9 @@ struct CCSQuotaReading {
         let dates = ISO8601DateFormatter()
         dates.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plainDates = ISO8601DateFormatter()
-        var windows = try values.map { value -> LimitWindow in
-            guard let percent = value.usedPercent, percent.isFinite, percent >= 0 else {
+        // Windows CCS cannot identify are internal codenames, not quotas.
+        var windows = try values.filter { $0.scope != "unknown" }.map { value -> LimitWindow in
+            guard let percent = value.usedPercent, percent.isFinite, percent >= 0, percent <= 100 else {
                 throw UsageProviderError.badResponse(status: 502)
             }
             let reset = value.resetAt.flatMap { dates.date(from: $0) ?? plainDates.date(from: $0) }
@@ -206,13 +211,14 @@ struct CCSQuotaReading {
             switch value.rateLimitType {
             case "five_hour": label = L10n.t("Current session")
             case "seven_day": label = L10n.t("All models")
-            default: label = value.label
+            default: label = value.modelLabel ?? value.label
             }
+            let weekly = value.cadence == "weekly" || value.rateLimitType == "seven_day"
+                || value.rateLimitType.hasPrefix("seven_day_")
             return LimitWindow(id: value.rateLimitType, label: label,
                                usedFraction: percent / 100, resetsAt: reset,
-                               duration: value.rateLimitType == "five_hour" ? 5 * 3600
-                                   : value.rateLimitType == "seven_day" || value.rateLimitType.hasPrefix("seven_day_")
-                                       ? 7 * 86400 : nil)
+                               duration: value.rateLimitType == "five_hour" || value.cadence == "5h" ? 5 * 3600
+                                   : weekly ? 7 * 86400 : nil)
         }
         windows += reply.credits?.windows ?? []
         windows += reply.cloudCredits?.windows(now: Date()) ?? []

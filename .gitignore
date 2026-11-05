@@ -1,6 +1,8 @@
 .DS_Store
 build/
+.build/
 DerivedData/
+.derivedData/
 *.xcodeproj
 *.xcworkspace
 !*.xcworkspace/contents.xcworkspacedata
@@ -10,4 +12,4 @@ xcuserdata/
 .agents/
 .forgeguard/
 .playwright-mcp/
-plans/
+/plans/

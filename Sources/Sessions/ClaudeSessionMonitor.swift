@@ -158,7 +158,9 @@ final class ClaudeSessionMonitor: ObservableObject, AgentActivityMonitor {
                      transcripts: ClaudeTranscriptReader? = nil,
                      ignoring: Set<Int32> = [],
                      ignoringDirectories: Set<String> = [],
-                     ownership: ClaudeSessionOwnership? = nil) -> [AgentSession] {
+                     ownership: ClaudeSessionOwnership? = nil,
+                     isAttended: (Int32) -> Bool = ClaudeSessionMonitor.isAttended(pid:))
+    -> [AgentSession] {
         let sources = ownership?.directories ?? [directory]
 
         var live: [ClaudeSessionRecord] = []
@@ -168,7 +170,8 @@ final class ClaudeSessionMonitor: ObservableObject, AgentActivityMonitor {
 
         for source in sources {
             for record in records(in: source, ignoring: ignoring,
-                                  ignoringDirectories: ignoringDirectories) {
+                                  ignoringDirectories: ignoringDirectories,
+                                  isAttended: isAttended) {
                 if let ownership, !ownership.claims(record, foundIn: source) { continue }
                 live.append(record)
                 origin[record.pid] = source
@@ -190,9 +193,17 @@ final class ClaudeSessionMonitor: ObservableObject, AgentActivityMonitor {
     ///
     /// `ignoringDirectories` is the second net under the pids: a session filed
     /// from Codenotch's own `/usage` scratch directory is never the user's,
-    /// whichever profile's directory it turns up in.
+    /// whichever profile's directory it turns up in. `isAttended` is asked only
+    /// of the sessions a program started, and leaves out the ones nobody is at.
+    ///
+    /// A session suspended with ctrl-Z is left out until it is resumed. Its
+    /// file stays and its process is alive, but nobody has it open: one seen on
+    /// a real machine sat stopped for a day behind the session resumed in the
+    /// same tab, drawn as an idle row nobody could find.
     static func records(in directory: URL, ignoring: Set<Int32> = [],
-                        ignoringDirectories: Set<String> = []) -> [ClaudeSessionRecord] {
+                        ignoringDirectories: Set<String> = [],
+                        isAttended: (Int32) -> Bool = ClaudeSessionMonitor.isAttended(pid:))
+    -> [ClaudeSessionRecord] {
         let ignoredDirectories = Set(ignoringDirectories.map {
             URL(fileURLWithPath: $0).standardizedFileURL.path
         })
@@ -206,18 +217,48 @@ final class ClaudeSessionMonitor: ObservableObject, AgentActivityMonitor {
                       let record = ClaudeSessionRecord(json: json),
                       !ignoring.contains(record.pid),
                       !ignoredDirectories.contains(URL(fileURLWithPath: record.cwd).standardizedFileURL.path),
-                      ProcessLiveness.isAlive(pid: record.pid, startedAt: record.startedAt)
+                      ProcessLiveness.isAlive(pid: record.pid, startedAt: record.startedAt),
+                      !ProcessLiveness.isStopped(pid: record.pid),
+                      !record.isFromSDK || isAttended(record.pid)
                 else { return nil }
                 return record
             }
+    }
+
+    /// Whether somebody can be at this session: it has a terminal, or an
+    /// application somewhere above it.
+    ///
+    /// Asked only of the sessions a program started (`isFromSDK`), because those
+    /// are not always anybody's. claude-mem's worker runs a headless Claude Code
+    /// for every session it observes, with no terminal and a daemon parented to
+    /// launchd above it. Each of those ran `busy`, fell `idle` and was announced
+    /// as a turn of yours that finished — seven times in a hundred seconds on a
+    /// real machine. `claude -p` typed into a terminal has that terminal, and an
+    /// editor driving Claude Code through the SDK has its own application above
+    /// it, so both stay.
+    nonisolated static func isAttended(pid: Int32) -> Bool {
+        SessionFocus.tty(of: pid) != nil || SessionFocus.owningApp(of: pid) != nil
     }
 
     /// The record's own answer where it has one, the transcript's where it does
     /// not. Desktop sessions always take the second path; terminal ones never
     /// do, which is what keeps their `waiting` state — the one thing only the
     /// terminal interface knows — exactly as it was.
+    ///
+    /// The name follows the same rule: the record's, unless it is only the
+    /// folder stand-in and the transcript has a title for it.
     static func state(of record: ClaudeSessionRecord,
                       transcripts: ClaudeTranscriptReader?) -> AgentSession {
+        let session = activity(of: record, transcripts: transcripts)
+        guard record.hasDerivedName,
+              let sessionID = record.sessionID,
+              let title = transcripts?.title(sessionID: sessionID, cwd: record.cwd)
+        else { return session }
+        return session.named(title)
+    }
+
+    private static func activity(of record: ClaudeSessionRecord,
+                                 transcripts: ClaudeTranscriptReader?) -> AgentSession {
         guard !record.reportsStatus,
               let sessionID = record.sessionID,
               let activity = transcripts?.activity(sessionID: sessionID, cwd: record.cwd)

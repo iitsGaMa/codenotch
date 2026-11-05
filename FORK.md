@@ -4,6 +4,13 @@
 - Source officielle (`upstream`) : https://github.com/vinzdg/codenotch
 - Branche maintenue : `homelab`.
 - Adaptations : quotas CCS distants, un indicateur par pool, détail par compte.
+- Depuis CCS 8.11, les fenêtres par modèle arrivent en `weekly_scoped:<modèle>` avec
+  `scope`/`cadence`/`modelLabel` : le libellé affiché est `modelLabel` (ex. « Fable »),
+  la durée suit `cadence`, et les fenêtres `scope: "unknown"` sont ignorées.
+  L'ancien format (`seven_day_scoped_*`) reste lu.
+- Ouvrir le menu de la barre relit les pools CCS depuis la source (`?refresh=true`) ;
+  les lignes suivent l'ordre de drain renvoyé par CCS.
+- Une carte plus haute que l'écran défile ; les autres gardent la mise en page upstream.
 
 La configuration et les identifiants restent dans `~/.config/codenotch/` et hors
 Git. Voir la section CCS du README. Les fichiers installés actuellement sur les
