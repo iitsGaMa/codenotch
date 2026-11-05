@@ -11,6 +11,21 @@ import AppKit
 /// break one of these.
 @MainActor
 final class StatusItemQuickToggleTests: XCTestCase {
+    func testOpeningMenuRefreshesCCSPoolsAndUpdatesVisibleReadings() {
+        let controller = StatusItemController(onOpenSettings: {})
+        let snapshot = ProviderSnapshot(id: "ccs-pool-animou", displayName: "Animou",
+                                        glyph: .claude, fidelity: .official, status: .ok, windows: [])
+        controller.snapshots = [snapshot]
+        var requested: [String] = []
+        controller.onRefreshProvider = { requested.append($0) }
+        let menu = NSMenu()
+        controller.menuWillOpen(menu)
+        XCTAssertEqual(requested, ["ccs-pool-animou"])
+        controller.snapshots = []
+        XCTAssertEqual(menu.items.first?.title, L10n.t("Waiting for the first reading…"))
+        controller.menuDidClose(menu)
+    }
+
     private func session(_ state: AgentSession.State, id: String) -> AgentSession {
         AgentSession(id: id, name: id, detail: "Terminal", state: state,
                      waitingFor: nil, since: Date())

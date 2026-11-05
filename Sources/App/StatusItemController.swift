@@ -38,8 +38,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The latest readings, mirrored from the store. The menu is rebuilt from
     /// these every time it opens, so reset countdowns and ages are fresh; the
     /// item's own summary is redrawn from them as they land.
+    private weak var openMenu: NSMenu?
     var snapshots: [ProviderSnapshot] = [] {
-        didSet { updateButton() }
+        didSet {
+            updateButton()
+            if let openMenu { rebuild(menu: openMenu, now: Date()) }
+        }
     }
     /// Whether the item shows limits at all, and whose — from Settings. Only
     /// the item's face follows it: the menu still lists every provider read.
@@ -316,14 +320,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// time would freeze "Resets in 51 min" and "20 hr ago" until the next
     /// reading lands.
     func menuWillOpen(_ menu: NSMenu) {
-        // Asked here rather than anywhere else because opening the menu is the
-        // one unambiguous "read these numbers" gesture the item has. The fetch
-        // it may start lands a moment later: the item's own face follows it at
-        // once — see `snapshots` — and the rows below are built from whatever
-        // has landed by the time the menu is next opened.
+        openMenu = menu
+        for snapshot in snapshots where snapshot.id.hasPrefix("ccs-pool-") {
+            onRefreshProvider?(snapshot.id)
+        }
         onLook?()
         rebuild(menu: menu, now: Date())
     }
+
+    func menuDidClose(_ menu: NSMenu) { openMenu = nil }
 
     /// Exposed for tests: what the menu says without needing a status item.
     func rebuild(menu: NSMenu, now: Date) {

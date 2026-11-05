@@ -60,6 +60,7 @@ actor CCSQuotaClient {
     private let redirects = CCSNoRedirects()
     private var loginTask: Task<Void, Error>?
     private var historyCache: (date: Date, accounts: [CCSUsageSummary])?
+    private var orderCache: [String]?
     private var authenticated = false
     private var loginRetryAfter = Date.distantPast
     private var cache: [String: (date: Date, data: Data)] = [:]
@@ -114,8 +115,8 @@ actor CCSQuotaClient {
         }
     }
 
-    func history() async throws -> [CCSUsageSummary] {
-        if let held = historyCache, Date().timeIntervalSince(held.date) < 120 { return held.accounts }
+    func history(freshness: UsageFreshness) async throws -> [CCSUsageSummary] {
+        if freshness == .standard, let held = historyCache, Date().timeIntervalSince(held.date) < 120 { return held.accounts }
         try await login()
         struct Reply: Decodable { let accounts: [CCSUsageSummary] }
         let data = try await request(URLRequest(url: configuration.dashboardURL.appendingPathComponent("api/bar/account-history")))
@@ -124,14 +125,30 @@ actor CCSQuotaClient {
         return accounts
     }
 
-    func quota(for email: String) async throws -> Data {
-        if let held = cache[email], Date().timeIntervalSince(held.date) < 120 { return held.data }
+    func drainOrder() async -> [String]? {
+        do {
+            try await login()
+            struct Reply: Decodable { let drainOrder: [String] }
+            let data = try await request(URLRequest(url: configuration.dashboardURL
+                .appendingPathComponent("api/cliproxy/auth/accounts/claude")))
+            orderCache = try JSONDecoder().decode(Reply.self, from: data).drainOrder
+        } catch {
+            // Keep the last known order during a dashboard outage.
+        }
+        return orderCache
+    }
+
+    func quota(for email: String, freshness: UsageFreshness) async throws -> Data {
+        if freshness == .standard, let held = cache[email], Date().timeIntervalSince(held.date) < 120 { return held.data }
         if let until = retryAfter[email], until > Date() {
             throw UsageProviderError.rateLimited(retryAfter: until.timeIntervalSinceNow)
         }
         try await login()
-        let url = configuration.dashboardURL.appendingPathComponent("api/cliproxy/quota/claude")
+        var url = configuration.dashboardURL.appendingPathComponent("api/cliproxy/quota/claude")
             .appendingPathComponent(email)
+        if freshness == .fromSource {
+            url.append(queryItems: [URLQueryItem(name: "refresh", value: "true")])
+        }
         do {
             let data = try await request(URLRequest(url: url))
             // Never cache an HTTP-200 quota error as a successful zero reading.
@@ -220,12 +237,22 @@ struct CCSQuotaProvider: UsageProvider {
                         source: "CCS · " + pool, manageURL: dashboardURL)
     }
     func fetchSnapshot() async throws -> ProviderSnapshot {
+        try await fetchSnapshot(freshness: .standard)
+    }
+
+    func fetchSnapshot(freshness: UsageFreshness) async throws -> ProviderSnapshot {
+        let order = await client.drainOrder()
+        let accounts = accounts.enumerated().sorted { left, right in
+            let a = order?.firstIndex(of: left.element.email) ?? Int.max
+            let b = order?.firstIndex(of: right.element.email) ?? Int.max
+            return a == b ? left.offset < right.offset : a < b
+        }.map(\.element)
         // Fetch concurrently so one slow account cannot hold up the whole pool.
         let readings = await withTaskGroup(of: (Int, CCSQuotaReading?).self) { group in
             for (index, account) in accounts.enumerated() {
                 group.addTask {
                     do {
-                        let data = try await client.quota(for: account.email)
+                        let data = try await client.quota(for: account.email, freshness: freshness)
                         return (index, try CCSQuotaReading.parse(data, expectedAccount: account.email))
                     } catch { return (index, nil) }
                 }
@@ -234,7 +261,7 @@ struct CCSQuotaProvider: UsageProvider {
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
-        let history = try? await client.history()
+        let history = try? await client.history(freshness: freshness)
         var windows: [LimitWindow] = []
         for (index, reading) in readings {
             let account = accounts[index]

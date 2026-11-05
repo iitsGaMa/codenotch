@@ -16,8 +16,9 @@ final class CCSQuotaProviderTests: XCTestCase {
         let network = URLSessionConfiguration.ephemeral
         network.protocolClasses = [CCSStub.self]
         CCSStub.paths = []
+        CCSStub.refreshQueries = []
         let client = CCSQuotaClient(configuration: config, session: URLSession(configuration: network))
-        let provider = CCSQuotaProvider(pool: "Animou", accounts: [account, second, unavailable], client: client, dashboardURL: config.dashboardURL)
+        let provider = CCSQuotaProvider(pool: "Animou", accounts: [second, account, unavailable], client: client, dashboardURL: config.dashboardURL)
         let snapshot = try await provider.fetchSnapshot()
         _ = try await provider.fetchSnapshot()
         XCTAssertEqual(snapshot.displayName, "Animou")
@@ -41,6 +42,10 @@ final class CCSQuotaProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.status, .ok)
         XCTAssertEqual(CCSStub.paths.filter { $0 == "/api/auth/login" }.count, 1)
         XCTAssertEqual(CCSStub.paths.filter { $0.hasSuffix("one@example.com") }.count, 1)
+        _ = try await provider.fetchSnapshot(freshness: .fromSource)
+        XCTAssertEqual(CCSStub.paths.filter { $0.hasSuffix("one@example.com") }.count, 2)
+        XCTAssertEqual(CCSStub.refreshQueries.filter { $0 == "refresh=true" }.count, 3)
+        XCTAssertEqual(CCSStub.paths.filter { $0 == "/api/auth/login" }.count, 1)
         let renderer = ImageRenderer(content: TooltipCard(snapshot: snapshot, now: Date(), direction: .trailing)
             .environment(\.colorScheme, .dark)
             .environment(\.notchSurfaceStyle, .solid))
@@ -102,16 +107,20 @@ final class CCSQuotaProviderTests: XCTestCase {
 
 private final class CCSStub: URLProtocol, @unchecked Sendable {
     static var paths: [String] = []
+    static var refreshQueries: [String] = []
     private static let lock = NSLock()
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         Self.lock.lock()
         Self.paths.append(request.url!.path)
+        if let query = request.url?.query { Self.refreshQueries.append(query) }
         Self.lock.unlock()
         let body: String
         if request.url!.path == "/api/auth/login" {
             body = #"{"success":true}"#
+        } else if request.url!.path == "/api/cliproxy/auth/accounts/claude" {
+            body = #"{"drainOrder":["one@example.com","two@example.com"]}"#
         } else if request.url!.lastPathComponent == "account-history" {
             body = #"{"accounts":[{"accountId":"one@example.com","firstRecordedAt":"2026-10-11T00:00:00Z","lastRecordedAt":"2026-10-11T01:00:00Z","days":[{"day":"2026-10-11","tokens":120,"cost":0.2,"requests":2}]},{"accountId":"unrelated@example.com","firstRecordedAt":"2026-10-11T00:00:00Z","lastRecordedAt":"2026-10-11T01:00:00Z","days":[{"day":"2026-10-11","tokens":999,"cost":99,"requests":99}]}]}"#
         } else if request.url!.lastPathComponent == "missing@example.com" {
