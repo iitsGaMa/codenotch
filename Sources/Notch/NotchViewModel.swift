@@ -1231,12 +1231,10 @@ final class NotchViewModel: ObservableObject {
         guard edge.isVertical, screenSize.height > 0, cellCount > 1 else {
             return NotchLayout.cellSpacing
         }
-        // Extra model cells spend the gaps first. Reserve the cards actually
-        // present; assuming four quota windows for every local model overflows laptops.
-        let slack = NotchLayout.slack(for: edge,
-            maxCardHeight: snapshots.isEmpty ? NotchLayout.maxCardHeight(sessionCap: 0)
-                : contentCardHeight(sessionCap: 0),
-            notchScale: sizeScale)
+        // Homelab fork: cards are clamped on screen and scroll when taller, so
+        // they never need the gaps. Reserving the tallest card here (upstream)
+        // collapses ring spacing to zero once a CCS pool card nears screen height.
+        let slack = NotchLayout.cardCorner
         let packed = NotchLayout.shapeLength(cellCount: cellCount, edge: edge,
                                              flare: flare, spacing: 0)
         return min(NotchLayout.cellSpacing,
@@ -1310,9 +1308,15 @@ final class NotchViewModel: ObservableObject {
     var slack: CGFloat { slack(cellCount: snapshots.count) }
 
     func slack(cellCount: Int) -> CGFloat {
-        NotchLayout.slack(for: edge,
-                          maxCardHeight: maxCardHeight(cellCount: cellCount),
-                          notchScale: sizeScale)
+        let slack = NotchLayout.slack(for: edge,
+                                      maxCardHeight: maxCardHeight(cellCount: cellCount),
+                                      notchScale: sizeScale)
+        // Homelab fork: ring spacing no longer shrinks to make room for the
+        // tallest card, so the room itself is capped to keep the panel on
+        // screen. Cards are clamped into the visible range and scroll anyway.
+        guard edge.isVertical, screenSize.height > 0 else { return slack }
+        let room = (screenSize.height - cutoutSpan(cellCount: cellCount)) / 2
+        return min(slack, max(NotchLayout.cardCorner, room))
     }
 
     /// How many sessions a tooltip may list here before it has to summarise
@@ -1485,8 +1489,7 @@ final class NotchViewModel: ObservableObject {
         let card = maxCardHeight(cellCount: cellCount)
         return NotchPlacement.panelSize(
             edge: edge,
-            length: cutoutSpan(cellCount: cellCount)
-                + 2 * NotchLayout.slack(for: edge, maxCardHeight: card, notchScale: sizeScale),
+            length: cutoutSpan(cellCount: cellCount) + 2 * slack(cellCount: cellCount),
             depth: NotchLayout.bodyDepth(for: edge) * sizeScale + edgeGap
                 + NotchLayout.tooltipDepth(for: edge, maxCardHeight: card)
         )
